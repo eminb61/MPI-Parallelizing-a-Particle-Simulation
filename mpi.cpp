@@ -102,7 +102,7 @@ void send_receive_bins(int rank, unordered_map<int, set<int>> &temp_send_bins,
     for(int i = 0; i < num_bins; ++i){
         int bi = (subdomain_start + i) / dim;
         int bj = (subdomain_start + i) % dim;
-        for(int d = 0; d < 8; ++d){
+        for(int d = 0; d < 9; ++d){
             if (dir[d][0] == 0 and dir[d][1] == 0) 
                 continue;
             int neigh_bi = bi + dir[d][0];
@@ -367,7 +367,29 @@ void simulate_one_step(particle_t* parts, int num_parts, double size, int rank, 
     vector<particle_t> not_leaving;
     // move the particles
     // (Could be faster)
-    move_particle(moving_out, not_leaving, size);
+    // move_particle(moving_out, not_leaving, size);
+    for(int i = 0; i < num_bins; ++i){
+        auto &bin = bins[i + (subdomain_start - subdomain_size)];
+
+        // remove particle
+        for(int j = bin.size()-1; j >= 0; --j){
+            particle_t &p = bin[j];
+            move(p, size);
+
+            int new_bin_idx = floor(p.x / BINSIZE) * dim + floor(p.y / BINSIZE);
+            if(new_bin_idx == subdomain_start + i){
+                continue;
+            }
+            if(new_bin_idx >= subdomain_start && new_bin_idx < subdomain_start + num_bins){
+                not_leaving.push_back(p);
+                bin.erase(bin.begin() + j);
+            }else{
+                int target_rank = get_rank(new_bin_idx);
+                moving_out[target_rank].push_back(p);
+                bin.erase(bin.begin() + j);
+            }
+        }
+    }
     // rebin particles that are not leaving
     rebin_particle(not_leaving);
     // send and receive particles for moving out
